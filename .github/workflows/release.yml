@@ -113,3 +113,101 @@ jobs:
         with:
           name: release-tooling-${{ needs.preflight.outputs.version }}
           path: /tmp/release-tooling.tgz
+  tag:
+    name: Create release tag
+    needs: [preflight, artifact-smoke]
+    if: needs.artifact-smoke.result == 'success'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.target }}
+          token: ${{ github.token }}
+
+      - uses: chainguard-dev/actions/setup-gitsign@9d631658f55713e5f63ca0cc21ee168f81301fd9 # v1.6.30
+
+      # setup-gitsign configures Git but still installs gitsign 0.16.1.
+      - name: Install gitsign 0.17.1
+        env:
+          GITSIGN_VERSION: "0.17.1"
+          GITSIGN_SHA256: "69213a8a0813a151e5a47d0060862952ff833a845d57309dff76f7ba6600abae"
+        run: |
+          GITSIGN_BIN=$(mktemp)
+          trap 'rm -f "$GITSIGN_BIN"' EXIT
+          curl -fLsS \
+            "https://github.com/sigstore/gitsign/releases/download/v${GITSIGN_VERSION}/gitsign_${GITSIGN_VERSION}_linux_amd64" \
+            -o "$GITSIGN_BIN"
+          printf '%s  %s\n' "$GITSIGN_SHA256" "$GITSIGN_BIN" | sha256sum -c
+          install -m 0755 "$GITSIGN_BIN" "$HOME/.gitsign/gitsign"
+          gitsign version
+
+      - name: Create or verify tag
+        env:
+          VERSION: ${{ needs.preflight.outputs.version }}
+          TARGET: ${{ needs.preflight.outputs.target }}
+          GITSIGN_ENABLE_SIGSTORE_GO: "true"
+          GITSIGN_REKOR_MODE: "online"
+          GITSIGN_REKOR_VERSION: "1"
+        run: |
+          TAG="v$VERSION"
+          verify_tag() {
+            for attempt in {1..5}; do
+              if gitsign verify-tag "$TAG" \
+                --certificate-identity "https://github.com/$GITHUB_REPOSITORY/.github/workflows/release.yml@$GITHUB_REF" \
+                --certificate-oidc-issuer "https://token.actions.githubusercontent.com"; then
+                return 0
+              fi
+              [ "$attempt" -eq 5 ] && return 1
+              echo "Tag verification attempt $attempt failed, retrying in 15 seconds"
+              sleep 15
+            done
+          }
+          if git rev-parse "$TAG^{commit}" >/dev/null 2>&1; then
+            [ "$(git rev-parse "$TAG^{commit}")" = "$TARGET" ] || {
+              echo "::error::$TAG points to a different commit"
+              exit 1
+            }
+            if verify_tag; then
+              echo "$TAG already points to the validated release commit and has a valid Sigstore signature"
+              exit 0
+            fi
+            echo "::error::$TAG must have a valid signature; existing tags cannot be replaced"
+            exit 1
+          fi
+          git tag -s "$TAG" -m "Release $TAG" "$TARGET"
+          verify_tag
+          git push origin "$TAG"
+
+  github-release-smoke:
+    needs: [preflight, tag]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: release-tooling-${{ needs.preflight.outputs.version }}
+          path: release
+      - name: Publish, download, and verify synthetic release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ needs.preflight.outputs.version }}
+          CHANNEL: ${{ needs.preflight.outputs.channel }}
+          PROMOTE: ${{ needs.preflight.outputs.promote_latest }}
+        run: |
+          set -euo pipefail
+          cd release
+          sha256sum release-tooling.tgz > checksums.txt
+          FLAGS=(--latest=false)
+          [ "$CHANNEL" = stable ] || FLAGS+=(--prerelease)
+          gh release create "v$VERSION" --repo "$GITHUB_REPOSITORY" "${FLAGS[@]}" --title "Synthetic v$VERSION" --notes "Sandbox only, no production packages." release-tooling.tgz checksums.txt
+          mkdir downloaded
+          gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --dir downloaded
+          (cd downloaded && sha256sum -c checksums.txt)
+          if [ "$PROMOTE" = true ]; then
+            gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --latest
+          fi
