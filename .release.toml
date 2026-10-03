@@ -1,11 +1,11 @@
 # SPDX-FileCopyrightText: 2026 Hari Srinivasan <harisrini21@gmail.com>
 # SPDX-License-Identifier: Apache-2.0
 
-version = "1.1.0-beta.1"
-channel = "beta"
-previous_tag = "v1.0.0"
-source_sha = "fe41eb2d10813fc9f37fec84e182342081ddf241"
+version = "1.1.0-rc.1"
+channel = "rc"
+previous_tag = "v1.1.0-beta.1"
+source_sha = "c41649d72a7754bdba12f7a3f98a6b515313cc0f"
 branch = "release/1.1"
-created_at = "2026-10-03T14:45:09.899881+00:00"
-commit_count = 0
+created_at = "2026-10-03T14:50:35.036810+00:00"
+commit_count = 1
 included_prs = []
