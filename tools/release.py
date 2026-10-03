@@ -466,7 +466,9 @@ def validate_progression(version: str, channel: str, branch: str, tags: list[str
 def distribution_tag(version: str, channel: str, tags: list[str]) -> str:
     validate_version_channel(version, channel)
     if channel != "stable":
-        return {"rc": "next", "beta": "beta", "alpha": "alpha"}[channel]
+        alias = {"rc": "next", "beta": "beta", "alpha": "alpha"}[channel]
+        newer = any(f"-{channel}." in tag and version_key(tag[1:]) > version_key(version) for tag in tags)
+        return f"{alias}-{version.split('-')[0].rsplit('.', 1)[0]}" if newer else alias
     newer = any("-" not in tag and version_key(tag[1:]) > version_key(version) for tag in tags)
     return "lts-" + version.rsplit(".", 1)[0] if newer else "latest"
 
@@ -507,6 +509,8 @@ def cut(series: str, upstream: str) -> None:
     branch = f"release/{series}"
     release_series(branch)
     ensure_preflight(upstream, "main")
+    if any(version_key(tag[1:])[:2] >= version_key(f"{series}.0")[:2] for tag in version_tags()):
+        raise ReleaseError("Cut a new minor line above all existing release tags; maintain existing lines in place")
     if run("git", "ls-remote", "--heads", upstream, f"refs/heads/{branch}"):
         raise ReleaseError(f"Release line already exists: {branch}")
     # An empty expected ref prevents a racing cut from updating another line.

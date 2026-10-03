@@ -19,6 +19,7 @@ on:
 concurrency:
   group: release
   cancel-in-progress: false
+  queue: max
 
 permissions:
   contents: read
@@ -188,6 +189,11 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          fetch-depth: 0
+          ref: ${{ needs.preflight.outputs.target }}
+          persist-credentials: false
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: release-tooling-${{ needs.preflight.outputs.version }}
@@ -200,6 +206,7 @@ jobs:
           PROMOTE: ${{ needs.preflight.outputs.promote_latest }}
         run: |
           set -euo pipefail
+          DIST_TAG=$(python3 -c 'import os; from tools.release import distribution_tag, version_tags; print(distribution_tag(os.environ["VERSION"], os.environ["CHANNEL"], version_tags()))')
           cd release
           sha256sum release-tooling.tgz > checksums.txt
           FLAGS=(--latest=false)
@@ -208,6 +215,6 @@ jobs:
           mkdir downloaded
           gh release download "v$VERSION" --repo "$GITHUB_REPOSITORY" --dir downloaded
           (cd downloaded && sha256sum -c checksums.txt)
-          if [ "$PROMOTE" = true ]; then
+          if [ "$DIST_TAG" = latest ]; then
             gh release edit "v$VERSION" --repo "$GITHUB_REPOSITORY" --latest
           fi
