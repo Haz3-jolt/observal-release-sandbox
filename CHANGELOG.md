@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## [1.1.0] - 2026-10-03
+
+No user-facing changes.
+
 ## [1.1.0-rc.1] - 2026-10-03
 
 ### Fixes
