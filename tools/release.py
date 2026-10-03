@@ -560,9 +560,27 @@ def backport(number: int, target: str, upstream: str, fork: str) -> None:
         run("git", "cherry-pick", "-x", *commits, cwd=worktree, capture=False)
         run("git", "push", fork, branch, cwd=worktree, capture=False)
         owner, _ = repository(fork)
-        body = f"Backport-of: #{number}\nTarget: {target}\nOriginal-commits:\n" + "\n".join(f"- {sha}" for sha in commits)
-        print(run("gh", "pr", "create", "--repo", repo, "--head", f"{owner}:{branch}", "--base", target,
-                  "--title", f"[{series}] {pull['title']}", "--body", body, cwd=worktree))
+        body = f"Backport-of: #{number}\nTarget: {target}\nOriginal-commits:\n" + "\n".join(
+            f"- {sha}" for sha in commits
+        )
+        print(
+            run(
+                "gh",
+                "pr",
+                "create",
+                "--repo",
+                repo,
+                "--head",
+                f"{owner}:{branch}",
+                "--base",
+                target,
+                "--title",
+                f"[{series}] {pull['title']}",
+                "--body",
+                body,
+                cwd=worktree,
+            )
+        )
     except Exception:
         print(f"Backport worktree preserved for recovery: {worktree}", file=sys.stderr)
         raise
@@ -624,7 +642,9 @@ def validate_target(target: str, branch: str, upstream: str = "origin", *, candi
         raise ReleaseError(f"Release commit changed forbidden files: {sorted(changed - set(RELEASE_FILES))}")
     for relative in VERSION_FILES:
         text = run("git", "show", f"{target}:{relative}")
-        actual = tomllib.loads(text)["project"]["version"] if relative.endswith(".toml") else json.loads(text)["version"]
+        actual = (
+            tomllib.loads(text)["project"]["version"] if relative.endswith(".toml") else json.loads(text)["version"]
+        )
         if actual != version:
             raise ReleaseError(f"Release versions disagree: {relative}")
     if f"## [{version}]" not in run("git", "show", f"{target}:CHANGELOG.md"):
@@ -635,8 +655,14 @@ def validate_target(target: str, branch: str, upstream: str = "origin", *, candi
     bump = "major" if key[0] != old[0] else "feature" if key[1] != old[1] else "patch"
     python_version = re.sub(r"-(alpha|beta|rc)\.", lambda m: {"alpha": "a", "beta": "b", "rc": "rc"}[m[1]], version)
     dist_tag = distribution_tag(version, channel, tags)
-    return dict(version=version, channel=channel, python_version=python_version, bump_type=bump,
-                dist_tag=dist_tag, promote_latest=str(dist_tag == "latest").lower())
+    return dict(
+        version=version,
+        channel=channel,
+        python_version=python_version,
+        bump_type=bump,
+        dist_tag=dist_tag,
+        promote_latest=str(dist_tag == "latest").lower(),
+    )
 
 
 def _ask(prompt):
@@ -646,7 +672,9 @@ def _ask(prompt):
     return answer
 
 
-def choose_release(changes: list[Change], branch: str, tags: set[str], channel: str | None = None, version: str | None = None):
+def choose_release(
+    changes: list[Change], branch: str, tags: set[str], channel: str | None = None, version: str | None = None
+):
     import questionary
     from questionary import Choice
 
@@ -676,13 +704,22 @@ def choose_release(changes: list[Change], branch: str, tags: set[str], channel: 
             change.category = _ask(questionary.select("Category:", choices=CATEGORIES, default=change.category))
             change.highlight = _ask(questionary.confirm("Highlight this change?", default=False))
             change.breaking = _ask(questionary.confirm("Breaking change?", default=change.breaking))
-    channel = channel or _ask(questionary.select("Release channel:", choices=("alpha", "beta", "rc", "stable"), default="rc"))
+    channel = channel or _ask(
+        questionary.select("Release channel:", choices=("alpha", "beta", "rc", "stable"), default="rc")
+    )
     version = version or next_version(branch, channel, list(tags))
     validate_progression(version, channel, branch, list(tags))
     return included, version, channel
 
 
-def prepare(preview_only: bool, upstream: str = "upstream", fork: str = "origin", channel: str | None = None, version: str | None = None, yes: bool = False) -> None:
+def prepare(
+    preview_only: bool,
+    upstream: str = "upstream",
+    fork: str = "origin",
+    channel: str | None = None,
+    version: str | None = None,
+    yes: bool = False,
+) -> None:
     import questionary
 
     base = ensure_preflight(upstream)
@@ -799,7 +836,9 @@ def main() -> None:
     parser.add_argument("--branch", help=argparse.SUPPRESS)
     args = parser.parse_args()
     try:
-        if (args.preview or args.yes or args.channel or args.version) and (args.cut or args.backport or args.status or args.resolve_push or args.validate_target):
+        if (args.preview or args.yes or args.channel or args.version) and (
+            args.cut or args.backport or args.status or args.resolve_push or args.validate_target
+        ):
             raise ReleaseError("Preparation flags cannot be combined with another action")
         if args.cut:
             cut(args.cut, args.upstream)
