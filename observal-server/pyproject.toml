@@ -1,0 +1,8 @@
+# SPDX-FileCopyrightText: 2026 Hari Srinivasan <harisrini21@gmail.com>
+# SPDX-License-Identifier: Apache-2.0
+
+[project]
+name = "observal-release-dummy-server"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = []
