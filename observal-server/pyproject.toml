@@ -3,6 +3,6 @@
 
 [project]
 name = "observal-release-dummy-server"
-version = "1.1.0-beta.1"
+version = "1.1.0-rc.1"
 requires-python = ">=3.11"
 dependencies = []
